@@ -4,61 +4,76 @@ TELEGRAMBOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 sendme() { python3 $TELEGRAMBOT_DIR/sendmessage.py "$@"; }
 
 # Telegram bot send message upon beginning and ending a task
-notifyme() {
+notifyme()
+{
 	# Need arguments
 	if [ $# -eq 0 ]; then
 		echo "Use: notifyme <command ...>"
 		return 1
 	fi
 
-	# Get infos
+	# Seconds to human-readable format
+	format_time()
+	{
+		local total_seconds=$1
+		local h=$((total_seconds / 3600))
+		local m=$(( (total_seconds % 3600) / 60 ))
+		local s=$((total_seconds % 60))
+		local duration=""
+		[ $h -gt 0 ] && duration+="${h}h "
+		[ $m -gt 0 ] || [ $h -gt 0 ] && duration+="${m}m "
+		duration+="${s}s"
+
+		echo "$duration"
+	}
+
+	# Get infos before command execution
 	local host="$(hostname -s)"
 	local cwd=$PWD
 	local git_branch=$(git branch --show-current 2>/dev/null)
 	local git_info=""
 	[ -n "$git_branch" ] && git_info="\n🌿 Branch: <code>$git_branch</code>"
 	
+	# Send start message
 	local text="▶️ Started running"
-	text="${text}\n<pre language=sh>$*</pre>"
-	text="${text}\n🖥️ Host: <code>$host</code>"
-	text="${text}\n📂 CWD: <code>$cwd</code>"
-	text="${text}${git_info}"
+	text+="\n<pre language=sh>$*</pre>"
+	text+="\n🖥️ Host: <code>$host</code>"
+	text+="\n📂 CWD: <code>$cwd</code>"
+	text+="${git_info}"
 	sendme "$text"
 
 	# Run command and capture output
 	local start_time=$SECONDS
 	local tmp_log=$(mktemp)
-
+	trap "rm -f '$tmp_log'; trap - RETURN" RETURN
 	bash -lc "$*" 2>&1 | tee "$tmp_log"
+
+	# Get exit status, last log lines and duration
 	local status=${PIPESTATUS[0]}
-
+	local last_output=$(tail -n 10 "$tmp_log")
 	local end_time=$SECONDS
-	local total_seconds=$((end_time - start_time))
+	local duration=$(format_time $((end_time - start_time)))
 
-	# Seconds to human-readable format
-	local h=$((total_seconds / 3600))
-	local m=$(( (total_seconds % 3600) / 60 ))
-	local s=$((total_seconds % 60))
-	local duration=""
-	[ $h -gt 0 ] && duration+="${h}h "
-	[ $m -gt 0 ] || [ $h -gt 0 ] && duration+="${m}m "
-	duration+="${s}s"
+	# Prepare message based on status
+	local header="✅ Finished running (Exit code: $status)"
+	if [ $status -eq 0 ]; then
+		header="✅ Finished successfully"
+		last_output=$(tail -n 5 "$tmp_log")
+	elif [ $status -eq 130 ]; then
+		header="🛑 Cancelled (Interrupted)"
+	else
+		header="❌ Finished with error ($status)"
+	fi
 
-	# Get last output and status
-	local last_output=$(tail -n 5 "$tmp_log")
-	local emoji="✅"
-	[ $status -ne 0 ] && emoji="❌"
-
-	text="$emoji Finished running"
-	text="${text}\n<pre language=sh>$*</pre>"
-	text="${text}\n⏱️ Duration: $duration"
-	text="${text}\n🖥️ Host: <code>$host</code>"
-	text="${text}\n📂 CWD: <code>$cwd</code>"
-	text="${text}${git_info}"
-	text="${text}\n📄 Last Output:<pre language=textile>$last_output</pre>"
+	# Send end message
+	text="$header"
+	text+="\n<pre language=sh>$*</pre>"
+	text+="\n⏱️ Duration: $duration"
+	text+="\n🖥️ Host: <code>$host</code>"
+	text+="\n📂 CWD: <code>$cwd</code>"
+	text+="${git_info}"
+	text+="\n📄 Last output:<pre language=textile>$last_output</pre>"
 	sendme "$text"
 
-	# Remove temporary file and return status
-	rm -f "$tmp_log"
 	return $status
 }
