@@ -31,9 +31,10 @@ def send_telegram_message(token, chat_id, text):
 	response = requests.post(url, data=payload)
 	
 	if response.status_code == 200:
-		print("Message sent successfully ✅")
+		print("[TELEGRAM BOT] Message sent successfully ✅")
 	else:
-		print("Failed to send message:", response.text)
+		print("[TELEGRAM BOT] Failed to send message. Error", response.json().get("error_code"))
+		print("[TELEGRAM BOT]", response.json().get("description"))
 
 if __name__ == "__main__":
 	# Load environment variables

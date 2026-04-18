@@ -28,6 +28,7 @@ notifyme()
 	}
 
 	# Get infos before command execution
+	local escaped_cmd=$(echo "$*" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 	local host="$(hostname -s)"
 	local cwd=$PWD
 	local git_branch=$(git branch --show-current 2>/dev/null)
@@ -36,7 +37,7 @@ notifyme()
 	
 	# Send start message
 	local text="▶️ Started running"
-	text+="\n<pre language=sh>$*</pre>"
+	text+="\n<pre language=sh>$escaped_cmd</pre>"
 	text+="\n🖥️ Host: <code>$host</code>"
 	text+="\n📂 CWD: <code>$cwd</code>"
 	text+="${git_info}"
@@ -50,29 +51,32 @@ notifyme()
 
 	# Get exit status, last log lines and duration
 	local status=${PIPESTATUS[0]}
-	local last_output=$(tail -n 10 "$tmp_log")
 	local end_time=$SECONDS
 	local duration=$(format_time $((end_time - start_time)))
 
 	# Prepare message based on status
 	local header="✅ Finished running (Exit code: $status)"
+	local lines=10
 	if [ $status -eq 0 ]; then
 		header="✅ Finished successfully"
-		last_output=$(tail -n 5 "$tmp_log")
+		lines=5
 	elif [ $status -eq 130 ]; then
 		header="🛑 Cancelled (Interrupted)"
 	else
 		header="❌ Finished with error ($status)"
 	fi
 
+	local raw_output=$(tail -n $lines "$tmp_log" 2>/dev/null)
+	local escaped_output=$(echo "$raw_output" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+
 	# Send end message
 	text="$header"
-	text+="\n<pre language=sh>$*</pre>"
+	text+="\n<pre language=sh>$escaped_cmd</pre>"
 	text+="\n⏱️ Duration: $duration"
 	text+="\n🖥️ Host: <code>$host</code>"
 	text+="\n📂 CWD: <code>$cwd</code>"
 	text+="${git_info}"
-	text+="\n📄 Last output:<pre language=textile>$last_output</pre>"
+	text+="\n📄 Last output:<pre language=textile>$escaped_output</pre>"
 	sendme "$text"
 
 	return $status
