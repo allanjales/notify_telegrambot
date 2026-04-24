@@ -46,7 +46,7 @@ notifyme()
 	# Run command and capture output
 	local start_time=$SECONDS
 	local tmp_log=$(mktemp)
-	trap "rm -f '$tmp_log'; trap - RETURN" RETURN
+	trap "rm -f '$tmp_log'" EXIT INT
 	bash -lc "$*" 2>&1 | tee "$tmp_log"
 
 	# Get exit status, last log lines and duration
@@ -55,7 +55,7 @@ notifyme()
 	local duration=$(format_time $((end_time - start_time)))
 
 	# Prepare message based on status
-	local header="✅ Finished running (Exit code: $status)"
+	local header="⚠️ Finished running (Exit code: $status)"
 	local lines=10
 	if [ $status -eq 0 ]; then
 		header="✅ Finished successfully"
@@ -76,7 +76,11 @@ notifyme()
 	text+="\n🖥️ Host: <code>$host</code>"
 	text+="\n📂 CWD: <code>$cwd</code>"
 	text+="${git_info}"
-	text+="\n📄 Last output:<pre language=textile>$escaped_output</pre>"
+	if [ -z "$raw_output" ]; then
+		text+="\n📄 No output"
+	else
+		text+="\n📄 Last output:<pre language=textile>$escaped_output</pre>"
+	fi
 	sendme "$text"
 
 	return $status
