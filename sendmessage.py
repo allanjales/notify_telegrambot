@@ -34,6 +34,7 @@ def send_telegram_message(token, chat_id, text):
 		print("[TELEGRAM BOT] Message sent successfully ✅")
 	else:
 		print("[TELEGRAM BOT] Failed to send message. Error", response.json().get("error_code"))
+		print("[TELEGRAM BOT] Message:", text)
 		print("[TELEGRAM BOT]", response.json().get("description"))
 
 if __name__ == "__main__":
